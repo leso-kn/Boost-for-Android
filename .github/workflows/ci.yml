@@ -50,7 +50,7 @@ jobs:
       if: always()
     - name: Zip Binaries
       run: |
-        zip -r binaries_${{ matrix.boost_version }}_${{ matrix.abi }}.zip ./bins
+        zip -r binaries_${{ matrix.boost_version }}_${{ matrix.abi }}.zip ./bins ./boost_*/boost
     - name: Prepare Release
       uses: ame-yu/action-delete-latest-release@v2
       with:
