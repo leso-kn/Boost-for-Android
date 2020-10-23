@@ -1,20 +1,18 @@
 name: CI
 
-on: [pull_request]
+on: [push]
 
 jobs:
   build:
     strategy:
       matrix:
-        boost_version: [1.70.0,1.73.0]
-        abi: [armeabi-v7a,arm64-v8a,x86,x86_64]
-        os: [ubuntu-latest,macos-latest]
+        boost_version: [1.73.0]
+        abi: [arm64-v8a]
+        os: [ubuntu-latest]
         include:
           # includes a new variable of 'variation' for each host os
           - os: ubuntu-latest
             variation: linux
-          - os: macos-latest
-            variation: mac
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
@@ -34,13 +32,6 @@ jobs:
         set
         mkdir -p bins/${{ matrix.variation }}
         mkdir -p logs/${{ matrix.variation }}
-    - name: Install dependencies (MacOS))
-      run: |
-        brew update
-        brew cask install android-ndk
-        export NDK_ROOT="$(brew --prefix)/share/android-ndk"
-        echo "::set-env name=NDK_ROOT::$NDK_ROOT"
-      if: matrix.os == 'macos-latest'
     - name: Build Boost for Android on ${{ matrix.variation }}
       run: CXXFLAGS="-std=c++14" ./build-android.sh --boost=${{ matrix.boost_version }} --arch=${{ matrix.abi }} --with-libraries=atomic,random,date_time,filesystem,system,thread,chrono "${NDK_ROOT}"
     - name: Prepare Binaries
@@ -57,6 +48,33 @@ jobs:
         name: binaries_${{ matrix.boost_version }}_${{ matrix.abi }}
         path: ./bins
       if: always()
+    - name: Zip Binaries
+      run: |
+        zip -r binaries_${{ matrix.boost_version }}_${{ matrix.abi }}.zip ./bins
+    - name: Prepare Release
+      uses: ame-yu/action-delete-latest-release@v2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ci-release
+        release_name: Pipeline Results
+        draft: false
+        prerelease: false
+    - name: Upload Release Asset
+      id: upload-release-asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+        asset_path: binaries_${{ matrix.boost_version }}_${{ matrix.abi }}.zip
+        asset_name: binaries_${{ matrix.boost_version }}_${{ matrix.abi }}.zip
+        asset_content_type: application/zip
     - name: Prepare Logs
       run: |
         set -x
